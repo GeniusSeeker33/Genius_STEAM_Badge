@@ -278,7 +278,7 @@ const questions = [
     ],
   },
 
-  // 24. Comfort with complexity (Level)
+  // 24–27: Level signals
   {
     question: 'How do you feel about highly complex problems in your field?',
     options: [
@@ -289,8 +289,6 @@ const questions = [
       { label: 'I seek out complexity and often teach others how to navigate it', category: 'Level5', weight: 1.0 },
     ],
   },
-
-  // 25. Depth of engagement (Level)
   {
     question: 'Which best describes your relationship to your current field?',
     options: [
@@ -301,8 +299,6 @@ const questions = [
       { label: 'I’m recognized as an expert/mentor and shape direction in my field', category: 'Level5', weight: 1.0 },
     ],
   },
-
-  // 26. Years in field (Level, heavier weight)
   {
     question: 'How many years have you been working in your primary field or discipline?',
     options: [
@@ -313,8 +309,6 @@ const questions = [
       { label: '15+ years', category: 'Level5', weight: 1.5 },
     ],
   },
-
-  // 27. Growth orientation (Level)
   {
     question: 'How actively are you investing in your own growth in this field right now?',
     options: [
@@ -327,17 +321,37 @@ const questions = [
   },
 ];
 
+// pay range text by level
+const getPayRange = (level) => {
+  switch (level) {
+    case 1:
+      return '$10–$20/hour (early-career / exploring)';
+    case 2:
+      return '$20–$30/hour (developing professional)';
+    case 3:
+      return '$30–$50/hour (established contributor)';
+    case 4:
+      return '$50–$100/hour (senior / strategic leader)';
+    case 5:
+    default:
+      return '$100+/hour or equivalent salary (top of field)';
+  }
+};
+
 export default function Quiz() {
   const [step, setStep] = useState(0);
-  const [answers, setAnswers] = useState([]); // array of option objects
+  const [answers, setAnswers] = useState([]);
   const [submitted, setSubmitted] = useState(false);
+  const [incomeAnswer, setIncomeAnswer] = useState(null); // "yes" | "no" | null
+  const [mentorAnswer, setMentorAnswer] = useState(null); // "yes" | "no" | null
+  const [showEmailForm, setShowEmailForm] = useState(false);
+  const [email, setEmail] = useState('');
 
   const handleAnswer = (option) => {
     setAnswers((prev) => [...prev, option]);
     setStep((prev) => prev + 1);
   };
 
-  // NEW scoring logic using STEAM + Level questions
   const calculateBadgeAndLevel = () => {
     const counts = {
       Science: 0,
@@ -381,7 +395,7 @@ export default function Quiz() {
 
   const submitToServer = async () => {
     if (submitted) {
-      alert('✅ Already submitted.');
+      // we still allow email even if already stored, so just quietly exit
       return;
     }
 
@@ -405,24 +419,77 @@ export default function Quiz() {
         }
       );
 
-      const result = await response.json();
+      // we’ll try to parse JSON; if it fails, just swallow
+      let result = {};
+      try {
+        result = await response.json();
+      } catch (e) {
+        // ignore parse errors
+      }
 
       if (response.ok) {
         setSubmitted(true);
-        alert('✅ Submitted!');
         console.log('✅ Server response:', result);
       } else {
         console.error('❌ Upload failed:', result);
-        alert('❌ Upload error: ' + (result.error || 'Unknown error'));
       }
     } catch (err) {
       console.error('❌ Network error:', err);
-      alert('❌ Something went wrong saving your answers.');
     }
+  };
+
+  const handleIncomeClick = (answer) => {
+    setIncomeAnswer(answer);
+  };
+
+  const handleMentorClick = (answer, badge, level) => {
+    setMentorAnswer(answer);
+    if (answer === 'yes') {
+      const subject = encodeURIComponent('GeniusSeeker Mentor Interest');
+      const body = encodeURIComponent(
+        `Hi GeniusSeeker team,\n\nI’d love to mentor others as a Level ${level} ${badge} professional.\n\nLove,\n`
+      );
+      window.location.href = `mailto:mentor@geniusseeker.com?subject=${subject}&body=${body}`;
+    }
+  };
+
+  const handleSendEmail = async () => {
+    if (!email) {
+      alert('Please enter your email address.');
+      return;
+    }
+
+    const { badge, level } = calculateBadgeAndLevel();
+    const payRange = getPayRange(level);
+
+    // Build a simple text version of results
+    const answerLines = answers
+      .map((a, i) => `Q${i + 1}: ${a.label}`)
+      .join('\n');
+
+    const bodyText = `Here are your GeniusSeeker STEAM Badge results:\n\n` +
+      `Badge: ${badge}\n` +
+      `Level: ${level}\n` +
+      `Suggested earning potential: ${payRange}\n\n` +
+      `Your answers:\n${answerLines}\n\n` +
+      `With love,\nGeniusSeeker`;
+
+    // try to store results for you first
+    await submitToServer();
+
+    const subject = 'Your GeniusSeeker STEAM Badge Results';
+    const mailtoUrl =
+      `mailto:${encodeURIComponent(email)}` +
+      `?subject=${encodeURIComponent(subject)}` +
+      `&body=${encodeURIComponent(bodyText)}` +
+      `&bcc=${encodeURIComponent('info@geniusseeker.com')}`; // change if you want a different copy address
+
+    window.location.href = mailtoUrl;
   };
 
   if (step >= questions.length) {
     const { badge, level } = calculateBadgeAndLevel();
+    const payRange = getPayRange(level);
 
     return (
       <div className="p-6 text-white text-center">
@@ -446,13 +513,102 @@ export default function Quiz() {
           🔢 Your skill level: <span className="font-bold">Level {level}</span>
         </p>
 
-        <button
-          onClick={submitToServer}
-          disabled={submitted}
-          className="mt-6 bg-purple-600 hover:bg-purple-700 text-white py-2 px-6 rounded-xl disabled:opacity-50"
-        >
-          {submitted ? 'Submitted' : 'Save my results'}
-        </button>
+        {/* earnings + mentoring flow */}
+        <p className="mt-4 text-lg max-w-2xl mx-auto">
+          Based on your <span className="font-bold">{badge}</span> Skill Level{' '}
+          <span className="font-bold">{level}</span>, professionals in similar roles are often earning around{' '}
+          <span className="font-bold">{payRange}</span>.
+        </p>
+
+        {incomeAnswer === null && (
+          <div className="mt-6 space-y-3">
+            <p className="text-lg">Are you currently earning at or above this level?</p>
+            <div className="flex justify-center gap-4 flex-wrap">
+              <button
+                onClick={() => handleIncomeClick('yes')}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white py-2 px-4 rounded-xl"
+              >
+                Yes
+              </button>
+              <button
+                onClick={() => handleIncomeClick('no')}
+                className="bg-rose-600 hover:bg-rose-700 text-white py-2 px-4 rounded-xl"
+              >
+                No
+              </button>
+            </div>
+          </div>
+        )}
+
+        {incomeAnswer === 'yes' && (
+          <div className="mt-6 space-y-3">
+            <p className="text-lg max-w-2xl mx-auto">
+              Beautiful. ✨ Would you be interested in mentoring other women to achieve their highest potential?
+            </p>
+            <div className="flex justify-center gap-4 flex-wrap">
+              <button
+                onClick={() => handleMentorClick('yes', badge, level)}
+                className="bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded-xl"
+              >
+                Yes, I’d love to mentor
+              </button>
+              <button
+                onClick={() => handleMentorClick('no', badge, level)}
+                className="bg-slate-600 hover:bg-slate-700 text-white py-2 px-4 rounded-xl"
+              >
+                Not right now
+              </button>
+            </div>
+          </div>
+        )}
+
+        {incomeAnswer === 'no' && (
+          <div className="mt-6 space-y-3">
+            <p className="text-lg max-w-2xl mx-auto">
+              Let’s change that. 💫 Schedule some time to get on the path to earning your full potential.
+            </p>
+            <a
+              href="https://calendly.com/desiree33/geniusseeker-interview"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block mt-2 bg-emerald-600 hover:bg-emerald-700 text-white py-2 px-6 rounded-xl"
+            >
+              Schedule a GeniusSeeker session
+            </a>
+          </div>
+        )}
+
+        {/* Email results flow */}
+        <div className="mt-8">
+          {!showEmailForm ? (
+            <button
+              onClick={() => setShowEmailForm(true)}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-6 rounded-xl"
+            >
+              Email me my results
+            </button>
+          ) : (
+            <div className="max-w-md mx-auto mt-4 space-y-3">
+              <p className="text-lg">
+                Enter the email address where you’d like to receive your results. You’ll also receive a copy from
+                GeniusSeeker for follow-up support.
+              </p>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                className="w-full rounded-lg px-3 py-2 text-black"
+              />
+              <button
+                onClick={handleSendEmail}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-xl"
+              >
+                Send results
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     );
   }
@@ -481,4 +637,6 @@ export default function Quiz() {
     </div>
   );
 }
+
+
 
