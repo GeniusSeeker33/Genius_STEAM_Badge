@@ -1,9 +1,7 @@
-// Updated Quiz.jsx with Post-Badge Flow: Membership and Mentorship Options
-
 import React, { useState } from 'react';
 
 const questions = [
-{
+  {
     question: 'If you could have any superpower at work, what would it be?',
     options: [
       { label: 'Mind-reading in meetings', category: 'Arts', weight: 0.7 },
@@ -46,8 +44,8 @@ const questions = [
   {
     question: 'Which fictional character would you pick as a mentor?',
     options: [
-      { label: 'Scarlette OHara', category: 'Arts', weight: 0.7 },
-      { label: 'Katness Everdeen', category: 'Engineering', weight: 0.9 },
+      { label: 'Scarlette O’Hara', category: 'Arts', weight: 0.7 },
+      { label: 'Katniss Everdeen', category: 'Engineering', weight: 0.9 },
       { label: 'Daenerys Targaryen', category: 'Science', weight: 0.8 },
       { label: 'Maleficent', category: 'Arts', weight: 0.6 },
       { label: 'Erin Brockovich', category: 'Math', weight: 0.5 },
@@ -84,7 +82,7 @@ const questions = [
     ],
   },
   {
-    question: 'Which of these activities would you love to see at the conference?',
+    question: 'Which of these activities would you love to see at a professional event?',
     options: [
       { label: 'Interactive workshops', category: 'Engineering', weight: 0.9 },
       { label: 'Networking mixers', category: 'Arts', weight: 0.7 },
@@ -113,16 +111,7 @@ const questions = [
       { label: 'Connecting with horses', category: 'Science', weight: 0.6 },
     ],
   },
-  {
-    question: 'Will you be attending next year’s Rocket Women Conference?',
-    options: [
-      { label: 'Definitely!', category: 'None', weight: 0 },
-      { label: 'Probably', category: 'None', weight: 0 },
-      { label: 'Not sure yet', category: 'None', weight: 0 },
-      { label: 'Unlikely', category: 'None', weight: 0 },
-      { label: 'No', category: 'None', weight: 0 },
-    ],
-  },
+  // Level-setting (years in field) – *no* RockIT branding
   {
     question: 'How many years have you been working in your field?',
     options: [
@@ -137,54 +126,58 @@ const questions = [
 
 export default function Quiz() {
   const [step, setStep] = useState(0);
-  const [answers, setAnswers] = useState([]);
+  const [answers, setAnswers] = useState([]); // array of option objects
   const [submitted, setSubmitted] = useState(false);
-  const [badgeAndLevel, setBadgeAndLevel] = useState(null);
-  const [showWorthPrompt, setShowWorthPrompt] = useState(false);
-  const [worthAnswer, setWorthAnswer] = useState(null);
 
   const handleAnswer = (option) => {
-    const updatedAnswers = [...answers, option];
-    setAnswers(updatedAnswers);
-
-    if (step + 1 < questions.length) {
-      setStep(step + 1);
-    } else {
-      const result = calculateBadgeAndLevel(updatedAnswers);
-      setBadgeAndLevel(result);
-    }
+    setAnswers((prev) => [...prev, option]);
+    setStep((prev) => prev + 1);
   };
 
-  const calculateBadgeAndLevel = (answersList) => {
-    const counts = { Science: 0, Technology: 0, Engineering: 0, Arts: 0, Math: 0 };
+  const calculateBadgeAndLevel = () => {
+    const counts = {
+      Science: 0,
+      Technology: 0,
+      Engineering: 0,
+      Arts: 0,
+      Math: 0,
+    };
+
     let level = 1;
 
-    answersList.forEach((answerObj, index) => {
-      const { category, weight } = answerObj;
-      if (index === 11) return; // skip conference attendance
-      if (category && category.startsWith('Level')) {
-        level = parseInt(category.replace('Level', ''), 10);
+    answers.forEach(({ category, weight }) => {
+      if (!category) return;
+
+      if (category.startsWith('Level')) {
+        const parsed = parseInt(category.replace('Level', ''), 10);
+        if (!Number.isNaN(parsed)) {
+          level = parsed;
+        }
       } else if (counts[category] !== undefined) {
         counts[category] += weight ?? 1;
       }
     });
 
     const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-    const badge = sorted[0][0];
+    const badge = sorted[0]?.[0] || 'Science';
+
     return { badge, level };
   };
 
-  const submitToFilebase = async () => {
-    if (submitted || !badgeAndLevel) return;
+  const submitToServer = async () => {
+    if (submitted) {
+      alert('✅ Already submitted.');
+      return;
+    }
 
-    const { badge, level } = badgeAndLevel;
+    const { badge, level } = calculateBadgeAndLevel();
 
     const fileData = {
       timestamp: new Date().toISOString(),
       answers,
       awardedBadge: badge,
       level,
-      source: 'rockitwomen-2025',
+      source: 'steam-card-quiz', // generic, not RockIT-specific
     };
 
     try {
@@ -196,111 +189,55 @@ export default function Quiz() {
           body: JSON.stringify(fileData),
         }
       );
+
       const result = await response.json();
+
       if (response.ok) {
         setSubmitted(true);
-        alert('✅ Submitted to Filebase!');
+        alert('✅ Submitted!');
+        console.log('✅ Server response:', result);
       } else {
-        alert('❌ Upload error: ' + result.error);
+        console.error('❌ Upload failed:', result);
+        alert('❌ Upload error: ' + (result.error || 'Unknown error'));
       }
     } catch (err) {
-      alert('❌ Network error occurred.');
+      console.error('❌ Network error:', err);
+      alert('❌ Something went wrong saving your answers.');
     }
   };
 
-  if (badgeAndLevel && !showWorthPrompt && worthAnswer === null) {
-    const { badge, level } = badgeAndLevel;
-    const payRanges = {
-      1: '$10–20/hr',
-      2: '$20–30/hr',
-      3: '$30–50/hr',
-      4: '$50–100/hr',
-      5: '$100+/hr',
-    };
+  if (step >= questions.length) {
+    const { badge, level } = calculateBadgeAndLevel();
 
     return (
       <div className="p-6 text-white text-center">
-        <h2 className="text-2xl font-bold">🎉 Badge Reveal</h2>
-        <p className="mt-4 text-lg">
-          🏅 You’ve earned the <span className="font-bold">{badge}</span> STEAM badge!
-        </p>
-        <p className="mt-2 text-lg">
-          🔢 Level {level} — Expected Pay Range: <span className="font-bold">{payRanges[level]}</span>
-        </p>
-        <button
-          onClick={() => {
-            submitToFilebase();
-            setShowWorthPrompt(true);
-          }}
-          className="mt-6 bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl"
-        >
-          Continue
-        </button>
-      </div>
-    );
-  }
+        <h2 className="text-2xl font-bold">🎉 Thanks for completing the quiz!</h2>
 
-  if (showWorthPrompt && worthAnswer === null) {
-    return (
-      <div className="p-6 text-white text-center">
-        <h2 className="text-xl">Are you currently earning what you're worth?</h2>
-        <div className="mt-4 space-x-4">
-          <button
-            onClick={() => setWorthAnswer('Yes')}
-            className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-xl"
-          >
-            Yes
-          </button>
-          <button
-            onClick={() => setWorthAnswer('No')}
-            className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-xl"
-          >
-            No
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (worthAnswer === 'No') {
-    return (
-      <div className="p-6 text-white text-left max-w-2xl mx-auto">
-        <h2 className="text-2xl font-bold">Let us help you get there</h2>
-        <p className="mt-4 text-lg font-semibold">🚀 Become a RockIT Women Member Today — 50% OFF!</p>
-        <p className="mt-2">💥 Just $100 for Two Years (normally $200 + fees)</p>
-        <ul className="mt-4 space-y-2 list-disc list-inside">
-          <li>🧭 2-year membership</li>
-          <li>🎁 Welcome gift + RockIT merch</li>
-          <li>🎟 Free tickets to all virtual events (8–10/year)</li>
-          <li>📬 Biannual member contact list</li>
-          <li>🤝 Quarterly networking (virtual + in-person)</li>
-          <li>🎫 Discounts for in-person events (WIT Conf)</li>
-          <li>📣 Early access to limited-seating events</li>
-          <li>🔐 Private social media groups</li>
-          <li>📄 1 free job listing/month</li>
-          <li>💬 30-minute 1:1 with Desiree (resume, brand, strategy, intros)</li>
+        <ul className="mt-6 space-y-2 text-left max-w-xl mx-auto">
+          {answers.map((a, i) => (
+            <li
+              key={i}
+              className="bg-white/10 backdrop-blur-sm p-3 rounded-md"
+            >
+              <span className="font-semibold">Q{i + 1}:</span> {a.label}
+            </li>
+          ))}
         </ul>
-        <button className="mt-6 bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-xl">
-          💫 Become a Member for $100 Today
-        </button>
-      </div>
-    );
-  }
 
-  if (worthAnswer === 'Yes') {
-    return (
-      <div className="p-6 text-white text-center">
-        <h2 className="text-2xl font-bold">🎉 Congratulations!</h2>
-        <p className="mt-4">You're on the path you deserve—and we love to see it.</p>
-        <p className="mt-2 text-lg font-semibold">Would you consider mentoring the next generation of talent?</p>
-        <a
-          href="https://docs.google.com/forms/d/e/1FAIpQLSdRajT99G2i__xO6n5KRFpKSHmND84mC0PnZEZRRWT5aE7MWQ/viewform"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-block mt-4 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl"
+        <h3 className="text-xl mt-6">
+          🏅 You’ve earned the <span className="font-bold">{badge}</span> STEAM badge!
+        </h3>
+        <p className="mt-2 text-lg">
+          🔢 Your skill level: <span className="font-bold">Level {level}</span>
+        </p>
+
+        <button
+          onClick={submitToServer}
+          disabled={submitted}
+          className="mt-6 bg-purple-600 hover:bg-purple-700 text-white py-2 px-6 rounded-xl disabled:opacity-50"
         >
-          🌟 Join as a Mentor
-        </a>
+          {submitted ? 'Submitted' : 'Save my results'}
+        </button>
       </div>
     );
   }
@@ -308,18 +245,23 @@ export default function Quiz() {
   const current = questions[step];
 
   return (
-    <div className="max-w-2xl mx-auto p-6 bg-white rounded-2xl shadow-xl mt-8 text-gray-800">
-      <h2 className="text-xl font-semibold mb-4">{current.question}</h2>
-      <div className="space-y-2">
-        {current.options.map((opt, idx) => (
-          <button
-            key={idx}
-            onClick={() => handleAnswer(opt)}
-            className="block w-full bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded-xl text-left"
-          >
-            {opt.label}
-          </button>
-        ))}
+    <div className="p-6 text-white">
+      <div className="max-w-2xl mx-auto">
+        <h2 className="text-xl font-semibold mb-4">
+          Question {step + 1} of {questions.length}
+        </h2>
+        <p className="mb-6 text-lg">{current.question}</p>
+        <div className="space-y-3">
+          {current.options.map((opt, idx) => (
+            <button
+              key={idx}
+              onClick={() => handleAnswer(opt)}
+              className="block w-full bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded-xl text-left"
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
