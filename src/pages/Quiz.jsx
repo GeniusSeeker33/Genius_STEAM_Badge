@@ -361,21 +361,24 @@ export default function Quiz() {
     Math: 0,
   };
 
-  // Start with "no level yet" and only set it from Level1–Level5 answers
+  // Q26 is the years-in-field question (0-based index 25)
+  const EXPERIENCE_QUESTION_INDEX = 25;
+
   let level = null;
 
-  answers.forEach((answerObj) => {
-    const { category, weight } = answerObj || {};
+  answers.forEach((answerObj, index) => {
+    if (!answerObj) return;
 
-    // 1) LEVEL: only questions that explicitly use Level1–Level5
-    if (category && category.startsWith('Level')) {
-      // If you ever add multiple level questions, you can choose to keep
-      // the highest or latest. For now, we just take the parsed value.
+    const { category, weight } = answerObj;
+
+    // 1) LEVEL: only use the experience question (Q26) to set Level1–Level5
+    if (index === EXPERIENCE_QUESTION_INDEX && category && category.startsWith('Level')) {
       const parsed = parseInt(category.replace('Level', ''), 10);
       if (!Number.isNaN(parsed)) {
         level = parsed;
       }
-      return; // don’t treat this as a STEAM category
+      // Don't treat this as a STEAM category
+      return;
     }
 
     // 2) BADGE: accumulate STEAM category weights
@@ -383,15 +386,15 @@ export default function Quiz() {
       counts[category] += weight ?? 1;
     }
 
-    // 3) Ignore answers that have no category or are meta questions
+    // 3) All other non-STEAM, non-level answers are ignored for scoring
   });
 
-  // If somehow no Level was set, default to 1
+  // If somehow no level was set, default to 1
   if (!level) {
     level = 1;
   }
 
-  // Determine the dominant STEAM badge
+  // Determine dominant STEAM badge
   const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
   const badge = sorted[0]?.[0] || 'Science';
 
