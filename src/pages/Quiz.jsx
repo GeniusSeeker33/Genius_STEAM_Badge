@@ -353,45 +353,50 @@ export default function Quiz() {
   };
 
   const calculateBadgeAndLevel = () => {
-    const counts = {
-      Science: 0,
-      Technology: 0,
-      Engineering: 0,
-      Arts: 0,
-      Math: 0,
-    };
-
-    const levelScores = {
-      1: 0,
-      2: 0,
-      3: 0,
-      4: 0,
-      5: 0,
-    };
-
-    answers.forEach(({ category, weight }) => {
-      if (!category) return;
-
-      if (category.startsWith('Level')) {
-        const n = parseInt(category.replace('Level', ''), 10);
-        if (!Number.isNaN(n) && levelScores[n] !== undefined) {
-          levelScores[n] += weight ?? 1;
-        }
-      } else if (counts[category] !== undefined) {
-        counts[category] += weight ?? 1;
-      }
-    });
-
-    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-    const badge = sorted[0]?.[0] || 'Science';
-
-    const level = Object.entries(levelScores).reduce(
-      (best, [lvl, score]) => (score > best.score ? { lvl: Number(lvl), score } : best),
-      { lvl: 1, score: 0 }
-    ).lvl;
-
-    return { badge, level };
+  const counts = {
+    Science: 0,
+    Technology: 0,
+    Engineering: 0,
+    Arts: 0,
+    Math: 0,
   };
+
+  // Start with "no level yet" and only set it from Level1–Level5 answers
+  let level = null;
+
+  answers.forEach((answerObj) => {
+    const { category, weight } = answerObj || {};
+
+    // 1) LEVEL: only questions that explicitly use Level1–Level5
+    if (category && category.startsWith('Level')) {
+      // If you ever add multiple level questions, you can choose to keep
+      // the highest or latest. For now, we just take the parsed value.
+      const parsed = parseInt(category.replace('Level', ''), 10);
+      if (!Number.isNaN(parsed)) {
+        level = parsed;
+      }
+      return; // don’t treat this as a STEAM category
+    }
+
+    // 2) BADGE: accumulate STEAM category weights
+    if (category && counts.hasOwnProperty(category)) {
+      counts[category] += weight ?? 1;
+    }
+
+    // 3) Ignore answers that have no category or are meta questions
+  });
+
+  // If somehow no Level was set, default to 1
+  if (!level) {
+    level = 1;
+  }
+
+  // Determine the dominant STEAM badge
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  const badge = sorted[0]?.[0] || 'Science';
+
+  return { badge, level };
+};
 
   const submitToServer = async () => {
     if (submitted) {
